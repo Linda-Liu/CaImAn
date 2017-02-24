@@ -332,7 +332,7 @@ def update_spatial_components(Y, C=None, f=None, A_in=None, sn=None, dims=None, 
 #    Y_resf = np.dot(Y, f.T) - A_.dot(coo_matrix(C[:nr, :]).dot(f.T))
     print("Computing residuals")
     if 'memmap' in str(type(Y)):
-        Y_resf = parallel_dot_product(Y,f.T,block_size=5000,dview=dview) - A_.dot(coo_matrix(C[:nr, :]).dot(f.T))
+        Y_resf = parallel_dot_product(Y,f.T,block_size=1000,dview=dview) - A_.dot(coo_matrix(C[:nr, :]).dot(f.T))
     else:
         Y_resf = np.dot(Y, f.T) - A_.dot(coo_matrix(C[:nr, :]).dot(f.T))
 

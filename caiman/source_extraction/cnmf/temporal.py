@@ -63,7 +63,7 @@ def constrained_foopsi_parallel(arg_in):
 
 
 #%%
-def update_temporal_components(Y, A, b, Cin, fin, bl = None,  c1 = None, g = None,  sn = None, nb = 1, ITER=2, method_foopsi='constrained_foopsi', memory_efficient=False, debug=False, dview=None,**kwargs):
+def update_temporal_components(Y, A, b, Cin, fin, bl = None,  c1 = None, g = None,  sn = None, nb = 1, ITER=2, method_foopsi='constrained_foopsi', block_size = 20000,  memory_efficient=False, debug=False, dview=None,**kwargs):
     """Update temporal components and background given spatial components using a block coordinate descent approach.
 
     Parameters
@@ -179,9 +179,16 @@ def update_temporal_components(Y, A, b, Cin, fin, bl = None,  c1 = None, g = Non
     print ('Generating residuals')
 #    YA = (A.T.dot(Y).T)*spdiags(1./nA,0,nr+nb,nr+nb)
 
-
+        
     if 'memmap' in str(type(Y)):
-        YA = parallel_dot_product(Y,A,dview=None,block_size=20000,transpose=True)*spdiags(old_div(1.,nA),0,nr+nb,nr+nb)
+        if block_size >= 500:
+            print ('Forcing single thread for memory issues')
+            dview_res = None
+        else:
+            print ('Using thread. If memory issues set block_size larger than 500')
+            dview_res = dview
+            
+        YA = parallel_dot_product(Y,A,dview=dview_res,block_size=block_size,transpose=True)*spdiags(old_div(1.,nA),0,nr+nb,nr+nb)
     else:
         YA = (A.T.dot(Y).T)*spdiags(old_div(1.,nA),0,nr+nb,nr+nb)
     print ('Done')
