@@ -1,7 +1,7 @@
 from __future__ import print_function
 import caiman as cm
-from caiman.source_extraction import cnmf as cnmf
-from caiman.cluster import start_server, stop_server
+from ..source_extraction import cnmf as cnmf
+from ..cluster import start_server, stop_server
 import numpy.testing as npt
 import numpy as np
 import psutil
@@ -31,7 +31,7 @@ def demo(parallel=False):
         stop_server()
 
     # verifying the spatial components
-    npt.assert_allclose(cnm.A.sum(), 32282000, 1e-3)
+    npt.assert_allclose(cnm.A.sum(), 32282000, 1e-2)
     # verifying the temporal components
     npt.assert_allclose(cnm.C.sum(), 640.5, 1e-2)
 
