@@ -34,6 +34,7 @@ pl.ion()
 #%%
 import caiman as cm
 from caiman.source_extraction.cnmf import cnmf as cnmf
+from caiman.source_extraction.cnmf.utilities import extract_DF_F
 from caiman.components_evaluation import evaluate_components
 from caiman.utils.visualization import plot_contours,view_patches_bar
 from caiman.base.rois import extract_binary_masks_blob
@@ -53,7 +54,6 @@ else:
     alpha_snmf=None #10e2  # this controls sparsity
 
 #%% FOR LOADING ALL TIFF FILES IN A FILE AND SAVING THEM ON A SINGLE MEMORY MAPPABLE FILE
-    
 fnames = []
 base_folder = './example_movies/'  # folder containing the demo files
 for file in glob.glob(os.path.join(base_folder, '*.tif')):
@@ -109,7 +109,9 @@ if not is_patches:
                     p=p, dview=dview, Ain=None,method_deconvolution='oasis',skip_refinement = False)
     cnm = cnm.fit(images)
     crd = plot_contours(cnm.A, Cn, thr=0.9)
-#%%
+    C_dff = extract_DF_F(Yr, cnm.A, cnm.C, cnm.bl, quantileMin = 8, frames_window = 200, dview = dview)
+    pl.plot(C_dff.T)
+    #%%
 else:
     #%%
     rf = 14  # half-size of the patches in pixels. rf=25, patches are 50x50
@@ -224,10 +226,11 @@ view_patches_bar(Yr, scipy.sparse.coo_matrix(A.tocsc()[:, idx_components]), C[
 view_patches_bar(Yr, scipy.sparse.coo_matrix(A.tocsc()[:, idx_components_bad]), C[
                                idx_components_bad, :], b, f, dims[0], dims[1], YrA=YrA[idx_components_bad, :], img=Cn)
 #%% STOP CLUSTER and clean up log files
-
-   
 cm.stop_server()
 
 log_files = glob.glob('Yr*_LOG_*')
 for log_file in log_files:
     os.remove(log_file)
+#%%
+C_dff = extract_DF_F(Yr, A.tocsc()[:, idx_components], C[idx_components, :], cnm.bl[idx_components], quantileMin = 8, frames_window = 200, dview = dview)
+pl.plot(C_dff.T)
