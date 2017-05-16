@@ -20,7 +20,7 @@ import scipy
 from ...mmapping import parallel_dot_product
 
 #%%
-def CNMFSetParms(Y, n_processes, K=30, gSig=[5, 5], ssub=2, tsub=2, p=2, p_ssub=2, p_tsub=2, thr=0.8, method_init= 'greedy_roi', nb = 1, n_pixels_per_process = 1000, block_size = 1000, check_nan = True, normalize_init = True, options_local_NMF = None):
+def CNMFSetParms(Y, n_processes, K=30, gSig=[5, 5], ssub=2, tsub=2, p=2, p_ssub=2, p_tsub=2, thr=0.8, method_init= 'greedy_roi', nb = 1, n_pixels_per_process = 1000, block_size = 1000, check_nan = True, normalize_init = True, options_local_NMF = None, remove_very_bad_comps = False):
     """Dictionary for setting the CNMF parameters.
     Any parameter that is not set get a default value specified
     by the dictionary default options
@@ -51,7 +51,8 @@ def CNMFSetParms(Y, n_processes, K=30, gSig=[5, 5], ssub=2, tsub=2, p=2, p_ssub=
         'ssub': p_ssub,             # spatial downsampling factor
         'tsub': p_tsub,              # temporal downsampling factor
         'only_init' : True,
-        'skip_refinement' : False
+        'skip_refinement' : False,
+        'remove_very_bad_comps' : remove_very_bad_comps
     }
     
     options['preprocess_params'] = {'sn': None,                  # noise level for each pixel
@@ -393,6 +394,8 @@ def app_vertex_cover(A):
         L.append(u)
 
     return np.asarray(L)
+    
+    
 #%%
 
 
@@ -524,6 +527,56 @@ def update_order(A):
 
     return O[::-1], lo[::-1]
 
+
+def update_order_greedy(A,flag_AA = True):
+    '''Determines the update order of the temporal components given the spatial
+    components using a greedy method
+    Input:
+     -------
+     A:       sparse crc matrix
+              matrix of spatial components (d x K) 
+     OR 
+              A.T.dot(A) matrix (d x d) if flag_AA = true
+     flag_AA: boolean (default true)     
+
+     Outputs:
+     ---------
+     O:   list of sets
+          list of subsets of components. The components of each subset can be updated in parallel
+     lo:  list
+          length of each subset
+
+    Written by Eftychios A. Pnevmatikakis, Simons Foundation, 2017
+    '''
+    K = np.shape(A)[-1]
+    O = []
+    lo = []
+    for i in range(K):
+        if i%100 == 0:
+            print(i)
+            
+        new_list = True
+        for ls in O:
+            #import pdb
+            #pdb.set_trace()
+            if flag_AA:
+                if A[i,ls].nnz == 0:
+                    ls.append(i)
+                    new_list = False
+                    break
+            else:
+                if (A[:,i].T.dot(A[:,ls])).nnz == 0:
+                    ls.append(i)
+                    new_list = False
+                    break
+                
+        if new_list:
+            O.append([i])
+        
+    lo = [len(ls) for ls in O]
+    return O,lo
+        
+    
 
 #%%
 def order_components(A, C):

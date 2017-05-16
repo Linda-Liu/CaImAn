@@ -64,8 +64,10 @@ def cnmf_patches(args_in):
                                         rf=None,stride=None, memory_fact=1, gnb = options['init_params']['nb'],\
                                         only_init_patch = options['patch_params']['only_init']\
                                         ,method_deconvolution =  options['temporal_params']['method'], n_pixels_per_process = options['preprocess_params']['n_pixels_per_process'],\
-                                        block_size = options['temporal_params']['block_size'], check_nan = options['preprocess_params']['check_nan'], skip_refinement = options['patch_params']['skip_refinement'], options_local_NMF = options['init_params']['options_local_NMF'], normalize_init = options['init_params']['normalize_init'])
+                                        block_size = options['temporal_params']['block_size'], check_nan = options['preprocess_params']['check_nan'], skip_refinement = options['patch_params']['skip_refinement'], options_local_NMF = options['init_params']['options_local_NMF'],
+                                        normalize_init = options['init_params']['normalize_init'], remove_very_bad_comps = options['patch_params']['remove_very_bad_comps'])
         
+
         cnm = cnm.fit(images)   
 
 
@@ -73,63 +75,6 @@ def cnmf_patches(args_in):
         images = []
         
         return idx_,shapes,scipy.sparse.coo_matrix(cnm.A),cnm.b,cnm.C,cnm.f,cnm.S,cnm.bl,cnm.c1,cnm.neurons_sn,cnm.g,cnm.sn,cnm.options,cnm.YrA.T
-
-
-#        [d1,d2,T]=Y.shape
-#
-#        options['spatial_params']['dims']=(d1,d2)
-#        logger.info('Preprocess Data')
-#        Yr,sn,g,psx=cm.source_extraction.cnmf.pre_processing.preprocess_data(Yr,**options['preprocess_params'])
-#        
-#
-#        logger.info('Initialize Components') 
-#
-#        Ain, Cin, b_in, f_in, center=cm.source_extraction.cnmf.initialization.initialize_components(Y, **options['init_params']) 
-#        
-#        nA = np.squeeze(np.array(np.sum(np.square(Ain),axis=0)))
-#
-#        nr=nA.size
-#        Cin=coo_matrix(Cin)
-#        
-#
-#        YA = (Ain.T.dot(Yr).T)*scipy.sparse.spdiags(old_div(1.,nA),0,nr,nr)
-#        AA = ((Ain.T.dot(Ain))*scipy.sparse.spdiags(old_div(1.,nA),0,nr,nr))
-#        YrA = YA - Cin.T.dot(AA)
-#        Cin=Cin.todense()           
-#
-#        if options['patch_params']['only_init']:
-#
-#            return idx_,shapes, coo_matrix(Ain), b_in, Cin, f_in, None, None , None, None, g, sn, options, YrA.T
-#
-#        else:
-#            
-#            raise Exception('Bug here, need to double check. For now set ["patch_params"]["only_init"] = True')
-#            logger.info('Spatial Update')                                                      
-#            A,b,Cin, f_in = cm.source_extraction.cnmf.spatial.update_spatial_components(Yr, Cin, f_in, Ain, sn=sn, **options['spatial_params'])
-#            options['temporal_params']['p'] = 0 # set this to zero for fast updating without deconvolution
-#            
-#            import pdb
-#            pdb.set_trace()
-#            
-#            logger.info('Temporal Update')  
-#            C,f,S,bl,c1,neurons_sn,g,YrA = cm.source_extraction.cnmf.temporal.update_temporal_components(Yr,A,b,Cin,f_in,bl=None,c1=None,sn=None,g=None,**options['temporal_params'])
-#
-#            logger.info('Merge Components') 
-#            A_m,C_m,nr_m,merged_ROIs,S_m,bl_m,c1_m,sn_m,g_m=cm.source_extraction.cnmf.merging.merge_components(Yr,A,b,C,f,S,sn,options['temporal_params'], options['spatial_params'], bl=bl, c1=c1, sn=neurons_sn, g=g, thr=options['merging']['thr'], fast_merge = True)
-#
-#            logger.info('Update Spatial II')
-#            A2,b2,C2,f = cm.source_extraction.cnmf.spatial.update_spatial_components(Yr, C_m, f, A_m, sn=sn, **options['spatial_params'])
-#
-#            logger.info('Update Temporal II')                                                       
-#            options['temporal_params']['p'] = p # set it back to original value to perform full deconvolution
-#            C2,f2,S2,bl2,c12,neurons_sn2,g21,YrA = cm.source_extraction.cnmf.temporal.update_temporal_components(Yr,A2,b2,C2,f,bl=None,c1=None,sn=None,g=None,**options['temporal_params'])
-#
-#
-#            Y=[]
-#            Yr=[]
-#
-#            logger.info('Done!')
-#            return idx_,shapes,A2,b2,C2,f2,S2,bl2,c12,neurons_sn2,g21,sn,options,YrA
 
     else:
         return None                
@@ -277,14 +222,14 @@ def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, gnb = 1, dvie
             patch_id+=1  
 
             
-    A_tot=scipy.sparse.csc_matrix((d,count))
-    B_tot=scipy.sparse.csc_matrix((d,nb*num_patches))
+  #  A_tot=scipy.sparse.csc_matrix((d,count))
+  #  B_tot=scipy.sparse.csc_matrix((d,nb*num_patches))
     C_tot=np.zeros((count,T))
     YrA_tot=np.zeros((count,T))
     F_tot=np.zeros((nb*num_patches,T))
     mask=np.zeros(d)
     sn_tot=np.zeros((d))
-    b_tot=[]
+  #  b_tot=[]
     f_tot=[]
     bl_tot=[]
     c1_tot=[]
@@ -299,12 +244,20 @@ def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, gnb = 1, dvie
     patch_id=0
 
     print('Transforming patches into full matrix')
+    
+    # instead of filling in the matrices, construct lists with their non-zero entries and coordinates
+    idx_tot_B = []
+    b_tot = []
+    idx_ptr_B = [0]
+    
+    idx_tot_A = []
+    a_tot = []
+    idx_ptr_A = [0]
 
     for fff in file_res:
         if fff is not None:
             idx_,shapes,A,b,C,f,S,bl,c1,neurons_sn,g,sn,_,YrA=fff
             sn_tot[idx_]=sn
-            b_tot.append(b)
             f_tot.append(f)
             bl_tot.append(bl)
             c1_tot.append(c1)
@@ -313,20 +266,24 @@ def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, gnb = 1, dvie
             idx_tot.append(idx_)
             shapes_tot.append(shapes)
             mask[idx_] += 1
+            
 
             for ii in range(np.shape(b)[-1]):
-#                import pdb
-#                pdb.set_trace()
-#                print ii
-
-                B_tot[idx_,patch_id]=b[:,ii,np.newaxis]
+                #B_tot[idx_,patch_id]=b[:,ii,np.newaxis]
+                b_tot.append(b[:,ii])
+                idx_tot_B.append(idx_)
+                idx_ptr_B.append(len(idx_))
                 F_tot[patch_id,:]=f[ii,:]
                 count_bgr += 1
+                print(count_bgr)
 
             for ii in range(np.shape(A)[-1]):            
                 new_comp=old_div(A.tocsc()[:,ii],np.sqrt(np.sum(np.array(A.tocsc()[:,ii].todense())**2)))
                 if new_comp.sum()>0:
-                    A_tot[idx_,count]=new_comp
+                    #A_tot[idx_,count]=new_comp
+                    a_tot.append(new_comp.toarray().flatten())
+                    idx_tot_A.append(idx_)
+                    idx_ptr_A.append(len(idx_))
                     C_tot[count,:]=C[ii,:]                      
                     YrA_tot[count,:]=YrA[ii,:]
                     id_patch_tot.append(patch_id)
@@ -335,8 +292,22 @@ def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, gnb = 1, dvie
             patch_id+=1  
         else:
             print('Skipped Empty Patch')
+            
+           
+    idx_tot_B = np.concatenate(idx_tot_B)
+    b_tot = np.concatenate(b_tot)     
+    idx_ptr_B = np.cumsum(np.array(idx_ptr_B))
+    B_tot = scipy.sparse.csc_matrix((b_tot, idx_tot_B, idx_ptr_B), shape=(d, count_bgr))     
+  
+    idx_tot_A = np.concatenate(idx_tot_A)
+    a_tot = np.concatenate(a_tot)     
+    idx_ptr_A = np.cumsum(np.array(idx_ptr_A))
+    A_tot = scipy.sparse.csc_matrix((a_tot, idx_tot_A, idx_ptr_A), shape=(d, count))         
 
-    A_tot=A_tot[:,:count]
+                 
+            
+    print('Done!')
+#    A_tot=A_tot[:,:count]
     C_tot=C_tot[:count,:]  
     YrA_tot=YrA_tot[:count,:]  
 
