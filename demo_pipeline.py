@@ -12,6 +12,7 @@ from builtins import map
 from builtins import range
 from past.utils import old_div
 import cv2
+import glob
 try:
     cv2.setNumThreads(1)
 except:
@@ -52,19 +53,19 @@ from caiman.utils.utils import download_demo
 #
 #cm.concatenate([m.resize(1,1,.2),m.resize(1,1,.2)],axis =1).play(fr =20, gain = 3.,magnification =3)
 #%% set parameters and create template by RIGID MOTION CORRECTION
-params_movie = {'fname': 'example_movies/demoSue2x.tif',
+params_movie = {'fname': ['example_movies/demoSue2x.tif'],
                 'niter_rig': 1,
                 'max_shifts': (6, 6),  # maximum allow rigid shift
-                'splits_rig': 56,  # for parallelization split the movies in  num_splits chuncks across time
+                'splits_rig': 28,  # for parallelization split the movies in  num_splits chuncks across time
                 # if none all the splits are processed and the movie is saved
                 'num_splits_to_process_rig': None,
                 # intervals at which patches are laid out for motion correction
                 'strides': (48, 48),
                 # overlap between pathes (size of patch strides+overlaps)
                 'overlaps': (24, 24),
-                'splits_els': 56,  # for parallelization split the movies in  num_splits chuncks across time
+                'splits_els': 28,  # for parallelization split the movies in  num_splits chuncks across time
                 # if none all the splits are processed and the movie is saved
-                'num_splits_to_process_els': [28, None],
+                'num_splits_to_process_els': [14, None],
                 'upsample_factor_grid': 4,  # upsample factor to avoid smearing when merging patches
                 # maximum deviation allowed for patch with respect to rigid
                 # shift
@@ -107,6 +108,28 @@ params_movie = {'fname': 'example_movies/demoSue2x.tif',
 # 'final_frate' : 30
 #                }
 #%%
+all_names = glob.glob('/mnt/ceph/neuro/Sue/k53/k53_20160530_RSM_125um_41mW_zoom2p2_00001_000*.tif')
+all_names.sort()
+all_names = all_names[:]
+print(all_names)
+params_movie = {'fname':all_names,
+                'max_shifts':(20,20), # maximum allow rigid shift
+                'niter_rig':1,
+                'splits_rig':10, # for parallelization split the movies in  num_splits chuncks across time
+                'num_splits_to_process_rig':None, # if none all the splits are processed and the movie is saved
+                 'p': 1, # order of the autoregressive system
+                 'merge_thresh' : 0.8,  # merging threshold, max correlation allowed
+                 'rf' : 14,  # half-size of the patches in pixels. rf=25, patches are 50x50
+                 'stride_cnmf' : 4,  # amounpl.it of overlap between the patches in pixels
+                 'K' : 6,  #  number of components per patch
+                 'is_dendrites': False,  # if dendritic. In this case you need to set init_method to sparse_nmf
+                 'init_method' : 'greedy_roi',
+                 'gSig' : [7, 7],  # expected half size of neurons
+                 'alpha_snmf' : None,  # this controls sparsity
+                 'final_frate' : 30
+                }
+#%%
+
 # params_movie = {'fname':'example_movies/demoMovie.tif',
 #                'max_shifts':(1,1), # maximum allow rigid shift
 #                'splits_rig':28, # for parallelization split the movies in  num_splits chuncks across time
@@ -137,6 +160,7 @@ max_shifts = params_movie['max_shifts']
 splits_rig = params_movie['splits_rig']  
 # if none all the splits are processed and the movie is saved
 num_splits_to_process_rig = params_movie['num_splits_to_process_rig']
+#%%
 # intervals at which patches are laid out for motion correction
 strides = params_movie['strides']
 # overlap between pathes (size of patch strides+overlaps)
@@ -154,7 +178,7 @@ max_deviation_rigid = params_movie['max_deviation_rigid']
 if fname == 'example_movies/demoSue2x.tif':
     download_demo()
 #%%
-m_orig = cm.load(fname)
+m_orig = cm.load_movie_chain(fname[:1])
 #%% play movie
 downsample_ratio = .2
 offset_mov = -np.min(m_orig[:100])
@@ -162,23 +186,25 @@ m_orig.resize(1, 1, downsample_ratio).play(
     gain=10, offset = offset_mov, fr=30, magnification=2)
 #%% RUN ANALYSIS
 c, dview, n_processes = cm.cluster.setup_cluster(
-    backend='local', n_processes=None, single_thread=False)
+    backend='local', n_processes=20, single_thread=False)
 #%%
 # movie must be mostly positive for this to work
-min_mov = cm.load(fname, subindices=range(400)).min()
-
-mc = MotionCorrect(fname, min_mov,
+min_mov = cm.load(fname[0], subindices=range(400)).min()
+mc_list = []
+new_templ = None
+for each_file in fname:
+    mc = MotionCorrect(each_file, min_mov,
                    dview=dview, max_shifts=max_shifts, niter_rig=niter_rig, splits_rig=splits_rig, 
-                   num_splits_to_process_rig=num_splits_to_process_rig, 
-                strides= strides, overlaps= overlaps, splits_els=splits_els,
-                num_splits_to_process_els=num_splits_to_process_els, 
-                upsample_factor_grid=upsample_factor_grid, max_deviation_rigid=max_deviation_rigid, 
+                   num_splits_to_process_rig=num_splits_to_process_rig,
                 shifts_opencv = True, nonneg_movie = True)
-#%%
-mc.motion_correct_rigid(save_movie=True)
-# load motion corrected movie
-m_rig = cm.load(mc.fname_tot_rig)
-pl.imshow(mc.total_template_rig, cmap = 'gray')
+    mc.motion_correct_rigid(template = new_templ, save_movie=True)
+    new_templ = mc.total_template_rig
+    
+    pl.imshow(new_templ, cmap = 'gray')
+    pl.pause(.1)
+    mc_list.append(mc)
+    
+
 #%% visualize templates
 cm.movie(np.array(mc.templates_rig)).play(
     fr=10, gain=5, magnification=2, offset=offset_mov)
@@ -197,7 +223,8 @@ m_rig.resize(1, 1, downsample_ratio).play(
 mc.motion_correct_pwrigid(save_movie=True, template=mc.total_template_rig, show_template = True)
 m_els = cm.load(mc.fname_tot_els)
 pl.imshow(mc.total_template_els, cmap = 'gray')
-
+bord_px_els = np.ceil(np.maximum(np.max(np.abs(mc.x_shifts_els)),
+                                 np.max(np.abs(mc.y_shifts_els)))).astype(np.int)
 #%% visualize elastic shifts
 pl.close()
 pl.subplot(2, 1, 1)
@@ -207,76 +234,76 @@ pl.subplot(2, 1, 2)
 pl.plot(mc.y_shifts_els)
 pl.ylabel('y_shifts (pixels)')
 pl.xlabel('frames')
-#%%
-bord_px_els = np.ceil(np.maximum(np.max(np.abs(mc.x_shifts_els)),
-                                 np.max(np.abs(mc.y_shifts_els)))).astype(np.int)
-
+#%% play corrected and downsampled movie
 downsample_ratio = .2
 m_els.resize(1, 1, downsample_ratio).play(
     gain=10, offset = 0, fr=30, magnification=2,bord_px = bord_px_els)
 #%% local correlation
 pl.imshow(m_els.local_correlations(eight_neighbours=True, swap_dim=False))
-#%%
+#%% visualize raw, rigid and pw-rigid motion correted moviews
 downsample_factor = .2
 cm.concatenate([m_orig.resize(1, 1, downsample_factor)+offset_mov, m_rig.resize(1, 1, downsample_factor), m_els.resize(
     1, 1, downsample_factor)], axis=2).play(fr=60, gain=15, magnification=2, offset=0)
-#%% compute metrics for the results
-final_size = np.subtract(mc.total_template_els.shape, 2 * bord_px_els)
-winsize = 100
-swap_dim = False
-resize_fact_flow = .2
-tmpl, correlations, flows_orig, norms, smoothness = cm.motion_correction.compute_metrics_motion_correction(
-    mc.fname_tot_els, final_size[0], final_size[1], swap_dim, winsize=winsize, play_flow=False, resize_fact_flow=resize_fact_flow)
-tmpl, correlations, flows_orig, norms, smoothness = cm.motion_correction.compute_metrics_motion_correction(
-    mc.fname_tot_rig, final_size[0], final_size[1], swap_dim, winsize=winsize, play_flow=False, resize_fact_flow=resize_fact_flow)
-tmpl, correlations, flows_orig, norms, smoothness = cm.motion_correction.compute_metrics_motion_correction(
-    fname, final_size[0], final_size[1], swap_dim, winsize=winsize, play_flow=False, resize_fact_flow=resize_fact_flow)
-
-#%% plot the results of metrics
-fls = [mc.fname_tot_els[:-4] + '_metrics.npz', mc.fname_tot_rig[:-4] +
-       '_metrics.npz', mc.fname[:-4] + '_metrics.npz']
-#%%
-for cnt, fl, metr in zip(range(len(fls)),fls,['pw_rigid','rigid','raw']):
-    with np.load(fl) as ld:
-        print(ld.keys())
-#        pl.figure()
-        print(fl)
-        print(str(np.mean(ld['norms'])) + '+/-' + str(np.std(ld['norms'])) +
-              ' ; ' + str(ld['smoothness']) + ' ; ' + str(ld['smoothness_corr']))
-        if True:
-            pl.subplot(len(fls), 4, 1 + 4 * cnt)
-            pl.ylabel(metr)
-            try:
-                mean_img = np.mean(
-                    cm.load(fl[:-12] + 'mmap'), 0)[12:-12, 12:-12]
-            except:
-                try:
-                    mean_img = np.mean(
-                        cm.load(fl[:-12] + '.tif'), 0)[12:-12, 12:-12]
-                except:
-                    mean_img = np.mean(
-                        cm.load(fl[:-12] + 'hdf5'), 0)[12:-12, 12:-12]
-                    
-            lq, hq = np.nanpercentile(mean_img, [.5, 99.5])
-            pl.imshow(mean_img, vmin=lq, vmax=hq)
-            pl.title('Mean')
-        #        pl.plot(ld['correlations'])
-
-            pl.subplot(len(fls), 4, 4 * cnt + 2)
-            pl.imshow(ld['img_corr'], vmin=0, vmax=.35)
-            pl.title('Corr image')
-    #        pl.colorbar()
-            pl.subplot(len(fls), 4, 4 * cnt + 3)
-    #
-            pl.plot(ld['norms'])
-            pl.xlabel('frame')
-            pl.ylabel('norm opt flow')
-            pl.subplot(len(fls), 4, 4 * cnt + 4)
-            flows = ld['flows']
-            pl.imshow(np.mean(
-                np.sqrt(flows[:, :, :, 0]**2 + flows[:, :, :, 1]**2), 0), vmin=0, vmax=0.3)
-            pl.colorbar()
-            pl.title('Mean optical flow')
+#%% compute metrics for the results, just to check that motion correction worked properly
+#final_size = np.subtract(mc.total_template_els.shape, 2 * bord_px_els)
+#winsize = 100
+#swap_dim = False
+#resize_fact_flow = .2
+#tmpl, correlations, flows_orig, norms, smoothness = cm.motion_correction.compute_metrics_motion_correction(
+#    mc.fname_tot_els, final_size[0], final_size[1], swap_dim, winsize=winsize, play_flow=False, resize_fact_flow=resize_fact_flow)
+#tmpl, correlations, flows_orig, norms, smoothness = cm.motion_correction.compute_metrics_motion_correction(
+#    mc.fname_tot_rig, final_size[0], final_size[1], swap_dim, winsize=winsize, play_flow=False, resize_fact_flow=resize_fact_flow)
+#tmpl, correlations, flows_orig, norms, smoothness = cm.motion_correction.compute_metrics_motion_correction(
+#    fname, final_size[0], final_size[1], swap_dim, winsize=winsize, play_flow=False, resize_fact_flow=resize_fact_flow)
+#
+##%% plot the results of metrics
+#fls = [mc.fname_tot_els[:-4] + '_metrics.npz', mc.fname_tot_rig[:-4] +
+#       '_metrics.npz', mc.fname[:-4] + '_metrics.npz']
+##%%
+#for cnt, fl, metr in zip(range(len(fls)),fls,['pw_rigid','rigid','raw']):
+#    with np.load(fl) as ld:
+#        print(ld.keys())
+##        pl.figure()
+#        print(fl)
+#        print(str(np.mean(ld['norms'])) + '+/-' + str(np.std(ld['norms'])) +
+#              ' ; ' + str(ld['smoothness']) + ' ; ' + str(ld['smoothness_corr']))
+#        if True:
+#            pl.subplot(len(fls), 4, 1 + 4 * cnt)
+#            pl.ylabel(metr)
+#            try:
+#                mean_img = np.mean(
+#                    cm.load(fl[:-12] + 'mmap'), 0)[12:-12, 12:-12]
+#            except:
+#                try:
+#                    mean_img = np.mean(
+#                        cm.load(fl[:-12] + '.tif'), 0)[12:-12, 12:-12]
+#                except:
+#                    mean_img = np.mean(
+#                        cm.load(fl[:-12] + 'hdf5'), 0)[12:-12, 12:-12]
+#                    
+#            lq, hq = np.nanpercentile(mean_img, [.5, 99.5])
+#            pl.imshow(mean_img, vmin=lq, vmax=hq)
+#            pl.title('Mean')
+#        #        pl.plot(ld['correlations'])
+#
+#            pl.subplot(len(fls), 4, 4 * cnt + 2)
+#            pl.imshow(ld['img_corr'], vmin=0, vmax=.35)
+#            pl.title('Corr image')
+#    #        pl.colorbar()
+#            pl.subplot(len(fls), 4, 4 * cnt + 3)
+#    #
+#            pl.plot(ld['norms'])
+#            pl.xlabel('frame')
+#            pl.ylabel('norm opt flow')
+#            pl.subplot(len(fls), 4, 4 * cnt + 4)
+#            flows = ld['flows']
+#            pl.imshow(np.mean(
+#                np.sqrt(flows[:, :, :, 0]**2 + flows[:, :, :, 1]**2), 0), vmin=0, vmax=0.3)
+#            pl.colorbar()
+#            pl.title('Mean optical flow')
+#%% restart cluster to clean up memory
+c, dview, n_processes = cm.cluster.setup_cluster(
+    backend='local', n_processes=None, single_thread=False)    
 #%% save each chunk in F format
 t1 = time.time()
 if not params_movie.has_key('max_shifts'):
@@ -300,21 +327,22 @@ add_to_movie = -np.nanmin(m_els) + 1  # movie must be positive
 remove_init = 0
 # downsample movie in time: use .2 or .1 if file is large and you want a quick answer             
 downsample_factor = 1 
-base_name = fname.split('/')[-1][:-4]
+base_name = fname[0].split('/')[-1][:-4]
 name_new = cm.save_memmap_each(fnames, dview=dview, base_name=base_name, resize_fact=(
     1, 1, downsample_factor), remove_init=remove_init, idx_xy=idx_xy, add_to_movie=add_to_movie, border_to_0=border_to_0)
 name_new.sort()
 print(name_new)
 
-#%% concatenate chunks if needed
+#%% if multiple files were saved in C format, now put them together in a single large file. 
 if len(name_new) > 1:
     fname_new = cm.save_memmap_join(
-        name_new, base_name='Yr', n_chunks=12, dview=dview)
+
+        name_new, base_name='Yr', n_chunks=30, dview=dview)
 else:
     print('One file only, not saving!')
     fname_new = name_new[0]
 
-t2 = time.time() - t1
+#t2 = time.time() - t1
 
 #%% LOAD MEMMAP FILE
 # fname_new='Yr_d1_501_d2_398_d3_1_order_F_frames_369_.mmap'
@@ -329,8 +357,9 @@ if np.min(images) < 0:
 if np.sum(np.isnan(images)) > 0:
     raise Exception('Movie contains nan! You did not remove enough borders')
 #%% correlation image
-Cn = cm.local_correlations(Y)
-Cn[np.isnan(Cn)] = 0
+for fff in fname_new:
+Cn = cm.movie(images[:1000]).local_correlations(eight_neighbours=True,swap_dim=True)
+#Cn[np.isnan(Cn)] = 0
 pl.imshow(Cn, cmap='gray', vmax=.35)
 #%% some parameter settings
 # order of the autoregressive fit to calcium imaging in general one (slow gcamps) or two (fast gcamps fast scanning)
@@ -405,19 +434,20 @@ cnm = cnm.fit(images)
 A, C, b, f, YrA, sn = cnm.A, cnm.C, cnm.b, cnm.f, cnm.YrA, cnm.sn
 #%% again recheck quality of components, stricter criteria
 final_frate = params_movie['final_frate']
-r_values_min = .75
+r_values_min = .85
 fitness_min = - 50
 fitness_delta_min = - 50
 Npeaks = 10
 traces = C + YrA
-idx_components, idx_components_bad = cm.components_evaluation.estimate_components_quality(
-    traces, Y, A, C, b, f, final_frate=final_frate, Npeaks=Npeaks, r_values_min=r_values_min, fitness_min=fitness_min, fitness_delta_min=fitness_delta_min)
+idx_components,idx_components_bad, fitness_raw, fitness_delta, r_values = cm.components_evaluation.estimate_components_quality(
+    traces, Y, A, C, b, f, final_frate=final_frate, Npeaks=Npeaks, r_values_min=r_values_min, fitness_min=fitness_min, fitness_delta_min=fitness_delta_min, return_all = True)
 print(' ***** ')
 print((len(traces)))
 print((len(idx_components)))
 #%% save results
-np.savez(os.path.join(os.path.split(fname_new)[0], os.path.split(fname_new)[1][:-4] + 'results_analysis.npz'), Cn=Cn, A=A.todense(
-), C=C, b=b, f=f, YrA=YrA, sn=sn, d1=d1, d2=d2, idx_components=idx_components, idx_components_bad=idx_components_bad)
+np.savez(os.path.join(os.path.split(fname_new)[0], os.path.split(fname_new)[1][:-4] + 'results_analysis.npz'), Cn=Cn, A=A,
+         C=C, b=b, f=f, YrA=YrA, sn=sn, d1=d1, d2=d2, idx_components=idx_components, idx_components_bad=idx_components_bad,
+         fitness_raw=fitness_raw, fitness_delta=fitness_delta, r_values=r_values)
 #%%
 pl.subplot(1, 2, 1)
 crd = plot_contours(A.tocsc()[:, idx_components], Cn, thr=0.9)
@@ -442,4 +472,4 @@ denoised.play(gain = 10, offset = 0,fr =50, magnification = 2)
 #%% reconstruct denoised movie without background
 denoised = cm.movie(A.dot(C)).reshape(dims+(-1,),order = 'F').transpose([2,0,1])
 #%%
-denoised.play(gain = 30, offset = 0,fr =50, magnification = 2)
+denoised.play(gain = 10, offset = 0,fr =100, magnification = 2)

@@ -1146,7 +1146,8 @@ def load(file_name,fr=30,start_time=0,meta_data=None,subindices=None,shape=None,
                     d1,d2=shape
                     input_arr=np.transpose(np.reshape(input_arr,(d1,d2,T),order='F'),(2,0,1))
                 else:
-                    raise Exception('Loaded vector is 2D , you need to provide the shape parameter')
+                    input_arr=input_arr[np.newaxis,:,:]
+#                    raise Exception('Loaded vector is 2D , you need to provide the shape parameter')
 
         elif extension == '.mat': # load npy file
             input_arr=loadmat(file_name)['data']
@@ -1182,6 +1183,21 @@ def load(file_name,fr=30,start_time=0,meta_data=None,subindices=None,shape=None,
                 else:
                     return movie(f['quietBlock'][subindices],fr=fr)
             
+        elif extension== '.h5':
+              with h5py.File(file_name, "r") as f:
+                if 'imaging' in f.keys():  
+                    if subindices is None:
+    #                    fr=f['fr'],start_time=f['start_time'],file_name=f['file_name']
+                        images = np.array(f['imaging']).squeeze() 
+                        if images.ndim>3:
+                            images = images[:,0]
+                    else:
+                        images = np.array(f['imaging'][subindices]).squeeze()
+                        if images.ndim>3:
+                            images = images[:,0]
+                            
+                    return movie(images.astype(np.float32))
+                
         elif extension == '.mmap':
 
             filename=os.path.split(file_name)[-1]
@@ -1211,8 +1227,15 @@ def load(file_name,fr=30,start_time=0,meta_data=None,subindices=None,shape=None,
                 raise Exception("sima module unavailable")
 
             dataset = sima.ImagingDataset.load(file_name)
+            frame_step = 1000
             if subindices is None:
-                input_arr = np.array(dataset.sequences[0]).squeeze()
+                input_arr = np.empty((
+                        dataset.sequences[0].shape[0],
+                        dataset.sequences[0].shape[2],
+                        dataset.sequences[0].shape[3]), dtype=np.float32)
+                for nframe in range(0, dataset.sequences[0].shape[0], frame_step):
+                    input_arr[nframe:nframe+frame_step] = np.array(dataset.sequences[0][
+                        nframe:nframe+frame_step, 0, :, :, 0]).astype(np.float32).squeeze()
             else:
                 input_arr = np.array(dataset.sequences[0])[subindices, :, :, :, :].squeeze()
 
@@ -1249,7 +1272,7 @@ def load_movie_chain(file_list, fr=30, start_time=0,
     mov = []
     for f in tqdm(file_list):
         m = load(f, fr=fr, start_time=start_time,
-                 meta_data=meta_data, subindices=subindices)
+                 meta_data=meta_data, subindices=subindices, in_memory = True)
         if m.ndim == 2:
             m = m[np.newaxis, :, :]
         tm, h, w = np.shape(m)
