@@ -1,6 +1,6 @@
 ## -*- coding: utf-8 -*-
 """
-@author: Andrea Giovannucci,
+@author Andrea Giovannucci,
 
 The functions apply_shifts_dft, register_translation, _compute_error, _compute_phasediff, and _upsampled_dft are from 
 SIMA (https://github.com/losonczylab/sima), licensed under the  GNU GENERAL PUBLIC LICENSE, Version 2, 1991. 
@@ -176,6 +176,8 @@ class MotionCorrect(object):
                                                                         template = template, shifts_opencv = self.shifts_opencv , save_movie_rigid = save_movie, add_to_movie= -self.min_mov, nonneg_movie = self.nonneg_movie)
         
         return self
+
+        
     
      def motion_correct_pwrigid(self,save_movie = True, template=None, show_template = True):  
         """Perform pw-rigid motion correction
@@ -1568,7 +1570,7 @@ def tile_and_correct(img,template, strides, overlaps,max_shifts, newoverlaps = N
         num_tiles = np.prod(dim_new_grid)
 
         max_shear  = np.percentile([np.max(np.abs(np.diff(ssshh,axis = xxsss))) for ssshh, xxsss in itertools.product([shift_img_x,shift_img_y],[0,1])],75)
-        print(max_shear)
+#        print(max_shear)
 
     #    shift_img_x[(np.abs(shift_img_x-rigid_shts[0])/iqr(shift_img_x-rigid_shts[0])/1.349)>max_sd_outlier] = np.median(shift_img_x)
     #    shift_img_y[(np.abs(shift_img_y-rigid_shts[1])/iqr(shift_img_y-rigid_shts[1])/1.349)>max_sd_outlier] = np.median(shift_img_y)
@@ -1638,11 +1640,11 @@ def tile_and_correct(img,template, strides, overlaps,max_shifts, newoverlaps = N
             cv2.imshow('frame',old_div(img_show,np.percentile(template,99)))
             cv2.waitKey(int(1./500*1000))      
 
-        else:
-            try:
-                cv2.destroyAllWindows()
-            except:
-                pass
+#        else:
+#            try:
+#                cv2.destroyAllWindows()
+#            except:
+#                pass
     #    xx,yy = np.array(start_step)[:,0]+newshapes[0]/2,np.array(start_step)[:,1]+newshapes[1]/2
     #    pl.cla()
     #    pl.imshow(new_img,vmin = 200, vmax = 500 ,cmap = 'gray',origin = 'lower')
@@ -1652,7 +1654,10 @@ def tile_and_correct(img,template, strides, overlaps,max_shifts, newoverlaps = N
 
 
         return new_img-add_to_movie, total_shifts,start_step,xy_grid    
-
+#%% 
+def compute_flow_single_frame(frame,templ,pyr_scale = .5,levels = 3, winsize = 100, iterations = 15, poly_n = 5, poly_sigma = 1.2/5, flags = 0):
+    flow = cv2.calcOpticalFlowFarneback(templ,frame,None,pyr_scale, levels, winsize, iterations, poly_n, poly_sigma, flags)
+    return flow
 #%%
 def compute_metrics_motion_correction(fname,final_size_x,final_size_y, swap_dim,pyr_scale = .5,levels = 3,winsize = 100, iterations = 15, poly_n = 5, poly_sigma = 1.2/5, flags = 0,\
                                       play_flow = False, resize_fact_flow = .2,template = None):
@@ -1746,37 +1751,28 @@ def compute_metrics_motion_correction(fname,final_size_x,final_size_y, swap_dim,
     np.savez(fname[:-4]+'_metrics',flows = flows, norms = norms, correlations = correlations,smoothness=smoothness,tmpl = tmpl, smoothness_corr = smoothness_corr, img_corr = img_corr)
     return tmpl, correlations, flows, norms, smoothness
 
-#%% motion correction in batches
+#%%
 def motion_correct_batch_rigid(fname, max_shifts, dview = None, splits = 56 ,num_splits_to_process = None, num_iter = 1,  template = None, shifts_opencv = False, save_movie_rigid = False, add_to_movie = None, nonneg_movie = False):
     """
     Function that perform memory efficient hyper parallelized rigid motion corrections while also saving a memory mappable file
-
     Parameters:
     -----------
     fname: str
         name of the movie to motion correct. It should not contain nans. All the loadable formats from CaImAn are acceptable
-
     max_shifts: tuple
         x and y maximum allowd shifts 
-
     dview: ipyparallel view
         used to perform parallel computing
-
     splits: int
         number of batches in which the movies is subdivided
-
     num_splits_to_process: int
         number of batches to process. when not None, the movie is not saved since only a random subset of batches will be processed
-
     num_iter: int
         number of iterations to perform. The more iteration the better will be the template. 
-
     template: ndarray
         if a good approximation of the template to register is available, it can be used 
-
     shifts_opencv: boolean
          toggle the shifts applied with opencv, if yes faster but induces some smoothing
-
     save_movie_rigid: boolean
          toggle save movie
     
