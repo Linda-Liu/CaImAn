@@ -46,7 +46,30 @@ Recent advances in calcium imaging acquisition techniques are creating datasets 
 ### Installation
 
 
-* Installation on posix (Mac and Linux)
+* Installation on Mac 
+
+   * Download and install Anaconda (Python 2.7 or Python 3.5) <http://docs.continuum.io/anaconda/install>
+
+   ```bash
+   
+   git clone https://github.com/simonsfoundation/CaImAn
+   cd CaImAn/
+   git pull
+   
+   EITHER
+   conda create -n CaImAn python=3.5 --file requirements_conda.txt   (For Python 3)
+   OR
+   conda create -n CaImAn ipython --file requirements_conda.txt   (For Python 2) 
+   
+   source activate CaImAn
+   pip install -r requirements_pip.txt
+   conda install -c menpo opencv3=3.1.0
+   python setup.py build_ext -i
+   conda install bokeh
+   ```
+
+
+* Installation on Linux 
 
    * Download and install Anaconda (Python 2.7 or Python 3.5) <http://docs.continuum.io/anaconda/install>
 
@@ -58,8 +81,9 @@ Recent advances in calcium imaging acquisition techniques are creating datasets 
    conda create -n CaImAn ipython --file requirements_conda.txt    
    source activate CaImAn
    pip install -r requirements_pip.txt
-   conda install -c menpo opencv3=3.1.0
+   conda install -c menpo opencv3=3.2.0
    python setup.py build_ext -i
+   conda install bokeh
    ```
 
    * To make the package available from everywhere and have it working *efficiently* under any configuration ALWAYS run these lines before starting spyder:
@@ -89,10 +113,28 @@ Recent advances in calcium imaging acquisition techniques are creating datasets 
     conda update --all
     
     ```
-    
+ 
+
+ 
 # Example
 
-  See the file demo_motion_correction.py and demo_caiman_cnmf.py in the root folder
+  ### Demos
+
+* Notebooks : The notebooks provide a simple and friendly way to get into CaImAn and understand its main characteristics. 
+
+   * you can find them in directly in CaImAn and launch them from your ipython Notebook application:
+   
+   * to launch jupyter notebook :
+   
+       ```bash
+    
+        source activate CaImAn
+        conda launch jupyter
+    
+       ```
+
+   
+  * /!\ if you want to launch directly the python files, please be advised that your python console still needs to be in the CaImAn folder and not somewhere else. 
 
 # Contributors:
 
