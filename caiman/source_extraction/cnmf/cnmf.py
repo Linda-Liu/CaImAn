@@ -64,7 +64,8 @@ class CNMF(object):
                  rf=None,stride=None, memory_fact=1, gnb = 1, only_init_patch=False,
                  method_deconvolution = 'oasis', n_pixels_per_process = 4000, block_size = 20000,
                  check_nan = True, skip_refinement = False, normalize_init=True, options_local_NMF = None,
-                                        remove_very_bad_comps = False, border_pix = 0, low_rank_background = True, update_background_components = True):
+                 remove_very_bad_comps = False, border_pix = 0, low_rank_background = True, update_background_components = True,
+                 rolling_sum = True, rolling_length = 100):
         """ 
         Constructor of the CNMF method
 
@@ -217,6 +218,8 @@ class CNMF(object):
         self.border_pix = border_pix
         self.low_rank_background = low_rank_background 
         self.update_background_components = update_background_components 
+        self.rolling_sum = rolling_sum
+        self.rolling_length = rolling_length
 
 
     def fit(self, images):
@@ -263,7 +266,7 @@ class CNMF(object):
                                check_nan=self.check_nan, nb=self.gnb, normalize_init = self.normalize_init,
                                options_local_NMF = self.options_local_NMF,
                                remove_very_bad_comps = self.remove_very_bad_comps, low_rank_background = self.low_rank_background, 
-                               update_background_components = self.update_background_components)
+                               update_background_components = self.update_background_components, rolling_sum = self.rolling_sum)
 
         self.options = options
         
@@ -393,10 +396,16 @@ class CNMF(object):
                 A, C, nr, merged_ROIs, S, bl, c1, sn_n, g = merge_components(Yr, A, [], np.array(C), [], np.array(
                     C), [], options['temporal_params'], options['spatial_params'], dview=self.dview,
                                                                              thr=self.merge_thresh, mx=np.Inf)
+            
+#            print('update spatial ...')
+#            A, b, C, f = update_spatial_components(
+#                    Yr, C = C, f = f, A_in = A, sn=sn, b_in = b, dview=self.dview, **options['spatial_params'])            
 
             print("update temporal")
             C, A, b, f, S, bl, c1, neurons_sn, g1, YrA = update_temporal_components(
                 Yr, A, b, C, f, dview=self.dview, bl=None, c1=None, sn=None, g=None, **options['temporal_params'])
+            
+            
 
         self.A=A
         self.C=C
